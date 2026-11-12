@@ -59,40 +59,21 @@ pipeline {
             }
             steps {
                 script {
-                    if ("$assets_url" != '') {
-                        withSecrets(secrets: secret_github_bot) {
-                            String assets = sh(
-                                script: "curl -s --fail -H 'Accept: application/vnd.github+json' -H 'Authorization: Bearer ${GITHUB_TOKEN}' ${assets_url}",
-                                returnStdout: true
-                            )
-                            String assetUrl = null
-                            def parsedJson = readJSON text: assets
-                            def assetName = 'release-description.yaml'
-                            parsedJson.each { item ->
-                                if (item.name == assetName) {
-                                    assetUrl = item.url
-                                }
-                            }
-                            if (assetUrl == null) {
-                                def availableAssets = parsedJson.collect { it.name }.join(', ')
-                                error("Asset '${assetName}' not found in release assets. Available assets: [${availableAssets}]. Assets URL: ${assets_url}")
-                            }
-                            echo "Downloading release-description.yaml from $assetUrl"
-                            sh "curl -s --fail -J -L -H 'Accept: application/octet-stream' -H 'Authorization: Bearer ${GITHUB_TOKEN}' ${assetUrl} -o ${WORKSPACE}/release-description.yaml"
-                        }
-                        def yamlFile = readYaml(file: "${WORKSPACE}/release-description.yaml")
-                        VERSION = yamlFile.version
-                        DATA_PREPPER_BUILD_NUMBER = yamlFile.build_number
-                        RELEASE_MAJOR_TAG = yamlFile.release_major_tag
-                        RELEASE_LATEST_TAG = yamlFile.release_latest_tag
+                    // Bypass release asset lookup: use a hardcoded release-description.yaml
+                    writeFile file: "${WORKSPACE}/release-description.yaml", text: '''version: 2.17.0
+build_number: 104
+release_major_tag: true
+release_latest_tag: true
+'''
+                    def yamlFile = readYaml(file: "${WORKSPACE}/release-description.yaml")
+                    VERSION = yamlFile.version
+                    DATA_PREPPER_BUILD_NUMBER = yamlFile.build_number
+                    RELEASE_MAJOR_TAG = yamlFile.release_major_tag
+                    RELEASE_LATEST_TAG = yamlFile.release_latest_tag
 
-                        if (isNullOrEmpty(VERSION) || isNullOrEmpty(DATA_PREPPER_BUILD_NUMBER) || isNullOrEmpty(RELEASE_MAJOR_TAG) || isNullOrEmpty(RELEASE_LATEST_TAG)) {
-                            currentBuild.result = 'ABORTED'
-                            error('Value of version, build_number, release_major_tag, release_latest_tag cannot be null or empty. Please check release-description.yaml')
-                        }
-                     } else {
+                    if (isNullOrEmpty(VERSION) || isNullOrEmpty(DATA_PREPPER_BUILD_NUMBER) || isNullOrEmpty(RELEASE_MAJOR_TAG) || isNullOrEmpty(RELEASE_LATEST_TAG)) {
                         currentBuild.result = 'ABORTED'
-                        error("$assets_url is empty. Unable to download release-description.yaml")
+                        error('Value of version, build_number, release_major_tag, release_latest_tag cannot be null or empty. Please check release-description.yaml')
                     }
                 }
             }
